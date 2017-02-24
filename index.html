@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>three.js / cannon.js example</title>
+    <meta charset="utf-8">
+    <style>
+      * {
+        margin:0;
+        padding:0
+      }
+
+      body {
+        overflow:hidden;
+      }
+    </style>
+  </head>
+  <body>
+     <script src="three.js"> </script>
+	 <script src="OrbitControls.js"> </script>
+     <script src="cannon.js"> </script>
+     <script src="CannonDebugRenderer.js"> </script>
+	 <script src="VRMLLoader.js"></script>
+    <script>
+
+      var world, mass, body, shape, timeStep=1/60,body2,body3, shape2,shape3,
+         camera, scene, renderer, geometry, material, mesh, mesh2, mesh3;
+
+       
+            var cannonDebugRenderer;
+         
+         
+         
+      initThree();
+      initCannon();
+      animate();
+
+      function initCannon() {        
+          world = new CANNON.World();
+          cannonDebugRenderer = new THREE.CannonDebugRenderer( scene, world );
+          world.gravity.set(0,-30,0);
+          world.broadphase = new CANNON.NaiveBroadphase();
+		   /*
+		   // Create a slippery material (friction coefficient = 0.0)
+                physicsMaterial = new CANNON.Material("slipperyMaterial");
+                var physicsContactMaterial = new CANNON.ContactMaterial(physicsMaterial,
+                                                                        physicsMaterial,
+                                                                        0.0, // friction coefficient
+                                                                        0.3  // restitution
+                                                                        );
+            
+			 // We must add the contact materials to the world
+                world.addContactMaterial(physicsContactMaterial);
+				*/ 
+			world.solver.iterations = 20;
+			world.defaultContactMaterial.contactEquationStiffness = 1e10;
+			world.defaultContactMaterial.contactEquationRelaxation = 10;
+         
+			//first static BOX
+			shape = new CANNON.Box(new CANNON.Vec3(1,1,1));
+			mass = 0;
+			body = new CANNON.Body({
+				mass: 0
+			});
+			body.addShape(shape);
+			//body.angularVelocity.set(0,10,0);
+			body.angularDamping = 0.6;
+			world.addBody(body);
+          
+			//second falling down BOX
+			shape2 = new CANNON.Box(new CANNON.Vec3(1,1,1));
+			mass = 1;
+			body2 = new CANNON.Body({
+				mass: 100
+			});
+			body2.position = new CANNON.Vec3(2,4,0);
+			body2.addShape(shape2);
+			//body2.angularVelocity.set(0,10,0);
+			body2.angularDamping = 0.5;
+			world.addBody(body2);
+ 
+		  // Create a plane
+			var groundBody = new CANNON.Body({
+				mass: 0, // mass == 0 makes the body static
+				position: new CANNON.Vec3(0,-10,0)
+			});
+			var groundShape = new CANNON.Plane();
+			groundBody.addShape(groundShape);
+			var rot = new CANNON.Vec3(1,0,0)
+			groundBody.quaternion.setFromAxisAngle(rot,-(Math.PI/2))
+			groundBody.angularVelocity.set(0,10,0);
+			//groundBody.position = new CANNON.Vec3(2,-6,1);
+			world.addBody(groundBody);
+      
+	  //load monster V-HACD (wrl) model
+          var loader = new THREE.VRMLLoader();
+				loader.load( 'monster.wrl', function ( object ) {
+					console.log(object);
+					
+					//get vertices
+					var verticesArray = [];
+					var verticesTemporaryArray = [];
+					var Vec3Vertices;
+					for(var x=0;x<object.children.length;x++){
+					    Vec3Vertices = object.children[x].parent.children[x].children["0"].geometry.vertices;
+							for(var y =0;y<Vec3Vertices.length;y++){
+							verticesTemporaryArray.push(Vec3Vertices[y].x);
+							verticesTemporaryArray.push(Vec3Vertices[y].y);
+							verticesTemporaryArray.push(Vec3Vertices[y].z);
+							}
+							verticesArray.push(verticesTemporaryArray);
+							//console.log(verticesTemporaryArray); //moje obiekty
+							verticesTemporaryArray = [];
+							
+					}
+					console.log(verticesArray);
+
+		 
+				
+				//get faces
+					var facesArray = [];
+					var facesTemporaryArray = [];
+					var Vec3faces;
+					for(var x=0;x<object.children.length;x++){
+					    Vec3faces = object.children[x].parent.children[x].children["0"].geometry.faces;
+							for(var y =0;y<Vec3faces.length;y++){
+							facesTemporaryArray.push(Vec3faces[y].a);
+							facesTemporaryArray.push(Vec3faces[y].b);
+							facesTemporaryArray.push(Vec3faces[y].c);
+							}
+							facesArray.push(facesTemporaryArray);
+							//console.log(verticesTemporaryArray); //moje obiekty
+							facesTemporaryArray = [];
+							
+					}
+					console.log(facesArray);
+					
+					//loop through groups of model
+					var modelGroupsArray = [];
+					for(var g=0;g<object.children.length;g++){
+					modelGroupsArray.push(new CANNON.Trimesh(verticesArray[g], facesArray[g]));
+					}
+					
+					
+					body3 = new CANNON.Body({
+						mass: 200
+					});         
+					body3.position = new CANNON.Vec3(0,5,2);
+					//add shape to body
+					for(var g=0;g<object.children.length;g++){
+						body3.addShape(modelGroupsArray[g]);
+					}
+					   
+					var rot = new CANNON.Vec3(1,0,0)
+					body3.quaternion.setFromAxisAngle(rot,-(Math.PI/2))		                   
+					//body3.angularVelocity.set(0,10,0);
+					body3.angularDamping = 0.6;
+					console.log(body3);
+					world.addBody(body3); //add monster 
+         
+				} );
+         
+		  	
+
+      }
+
+      function initThree() {
+
+          scene = new THREE.Scene();
+          
+          camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 100 );
+          camera.position.z = 10;
+          camera.position.x = 10
+		  camera.rotation.y=1;
+          scene.add( camera );
+
+          
+          
+          geometry = new THREE.BoxGeometry( 2, 2, 2 );
+          material = new THREE.MeshBasicMaterial( { color: 0xff0000, wireframe: true } );
+
+          mesh = new THREE.Mesh( geometry, material );
+          scene.add( mesh );
+          
+           mesh2 = new THREE.Mesh( geometry, material );
+          scene.add( mesh2 );
+
+          
+         
+          renderer = new THREE.WebGLRenderer();
+                               
+                                renderer.setPixelRatio( window.devicePixelRatio );
+                                renderer.setSize( window.innerWidth, window.innerHeight );
+
+          controls = new THREE.OrbitControls( camera, renderer.domElement );
+				controls.addEventListener( 'change', render ); // remove when using animation loop
+				// enable animation loop when using damping or autorotation
+				//controls.enableDamping = true;
+				//controls.dampingFactor = 0.25;
+				controls.enableZoom = true;
+          
+          document.body.appendChild( renderer.domElement );
+
+      }
+
+      function animate() {
+
+          requestAnimationFrame( animate );
+          updatePhysics();
+          cannonDebugRenderer.update();      // Update the debug renderer
+          render();
+
+      }
+
+      function updatePhysics() {
+
+          // Step the physics world
+          world.step(timeStep);
+
+          // Copy coordinates from Cannon.js to Three.js
+          mesh.position.copy(body.position);
+          mesh.quaternion.copy(body.quaternion);
+          
+        //  mesh2.position.copy(body2.position);
+         // mesh2.quaternion.copy(body2.quaternion);
+         // 
+         // mesh3.position.copy(body3.position);
+        // mesh3.quaternion.copy(body3.quaternion);
+
+      }
+
+      function render() {
+
+          renderer.render( scene, camera );
+
+      }
+
+    </script>
+  </body>
+</html>
